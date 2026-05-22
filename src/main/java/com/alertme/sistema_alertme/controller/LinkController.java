@@ -6,8 +6,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@RestController // Indica que esta classe é um controlador REST
-@RequestMapping("/api/links") // Define a rota base
+@RestController // Controlador REST
+@RequestMapping("/api/links") // Rota base
 public class LinkController {
 
     private final LinkVerificationService service;

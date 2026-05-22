@@ -9,7 +9,7 @@ public class Trie {
    private static class TrieNode {
         private final Map<Character, TrieNode> children = new HashMap<>();
         private boolean isEndOfDomain = false;
-        private String source = "STATIC"; // Identifica se foi inserido por IA ou Base Fixa
+        private String source = "STATIC"; // Identifica se foi inserido pelo VirusTotal ou Estático para testes
 
         public void setEndOfDomain(boolean endOfDomain, String source) {
             this.isEndOfDomain = endOfDomain;

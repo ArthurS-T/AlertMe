@@ -1,43 +1,44 @@
 package com.alertme.sistema_alertme.model;
 
+import jakarta.persistence.*;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+@Entity
+@Table(name = "tb_links")
 public class Links {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY) // ID autoincrementável
+    private Long id;
+
+    @Column(nullable = false, length = 500)
     private String url;
-    private Boolean isSuspicious;
+
+    @JsonProperty("isSuspicious")
+    @Column(nullable = false)
+    private boolean isSuspicious;
+
+    @Column(length = 255)
     private String reason;
 
-    public Links(String url, Boolean isSuspicious, String reason) {
+    // Construtores
+    public Links() {}
+
+    public Links(String url, boolean isSuspicious, String reason) {
         this.url = url;
         this.isSuspicious = isSuspicious;
         this.reason = reason;
     }
 
-    public String getUrl() {
-        return url;
-    }
-
-    public void setUrl(String url) {
-        this.url = url;
-    }    
-
-    public Boolean isSuspicious() {
-        return isSuspicious;
-    }
-
-    public void setSuspicious(Boolean isSuspicious) {
-        this.isSuspicious = isSuspicious;
-    }
-
-    public String getReason() {
-        return reason;
-    }
-
-    public void setReason(String reason) {
-        this.reason = reason;
-    }
+    // Getters e Setters
+    public Long getId() { return id; }
     
-    public Links() { 
-        // Construtor vazio para desserialização
-    }
+    public String getUrl() { return url; }
+    public void setUrl(String url) { this.url = url; }
+
+    public boolean isSuspicious() { return isSuspicious; }
+    public void setSuspicious(boolean isSuspicious) { this.isSuspicious = isSuspicious; }
+
+    public String getReason() { return reason; }
+    public void setReason(String reason) { this.reason = reason; }
 }
-
-

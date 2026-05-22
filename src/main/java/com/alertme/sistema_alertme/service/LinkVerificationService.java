@@ -1,20 +1,24 @@
 package com.alertme.sistema_alertme.service;
 
 import com.alertme.sistema_alertme.model.Links;
+import com.alertme.sistema_alertme.repository.LinkRepository;
 import com.alertme.sistema_alertme.service.engine.Trie;
-import java.util.ArrayList;
-import java.util.List;
-
 import org.springframework.stereotype.Service;
+import java.util.List;
 
 @Service
 public class LinkVerificationService {
 
     private final Trie trie = new Trie();
-    private final List<Links> history = new ArrayList<>();
+    private final LinkRepository repository; // Injeção do Repository
+    private final VirusTotalService virusTotalService; // Integrando o serviço do VirusTotal
 
-    public LinkVerificationService() {
-        // Exemplo de inserção de domínios maliciosos
+    // O Spring injeta o repository automaticamente aqui
+    public LinkVerificationService(LinkRepository repository, VirusTotalService virusTotalService) {
+        this.repository = repository;
+        this.virusTotalService = virusTotalService; 
+        
+        // Teste inicial estático na Trie
         trie.insert("malware.com", "STATIC");
         trie.insert("phishing.com", "STATIC");
     }
@@ -25,32 +29,24 @@ public class LinkVerificationService {
         if (trieResult.found()) {
             return registrarBanco(url, true, "Detectado na lista maliciosa (" + trieResult.source() + ")");
         }
-        // Verificação adicional com IA (simulada)
-        if (simularIA(url)) {
-            trie.insert(url, "IA");
-            return registrarBanco(url, true, "Detectado por IA");
-    }
+
+        boolean isMaliciousVT = virusTotalService.checkUrlIsMalicious(url);
+        
+        if (isMaliciousVT) {
+            trie.insert(url, "VirusTotal"); 
+            return registrarBanco(url, true, "Detectado pela API VirusTotal");
+        }
+        
         return registrarBanco(url, false, "Link seguro");
     }
     
     private Links registrarBanco(String url, boolean isSuspicious, String reason) {
         Links record = new Links(url, isSuspicious, reason);
-        history.add(record);
-        return record;
+        return repository.save(record); // Salva diretamente no PostgreSQL!
     }
 
-    private boolean simularIA(String url){
-        return url.contains("suspicious");
-    }
 
     public List<Links> getHistory() {
-        return new ArrayList<>(history);
+        return repository.findAll(); // Busca todos os registros do PostgreSQL!
     }
-
 }
-
-
-
-
-
-

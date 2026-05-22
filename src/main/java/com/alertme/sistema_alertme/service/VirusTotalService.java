@@ -39,7 +39,7 @@ public class VirusTotalService {
                     String analysisId = (String) data.get("id");
 
                     // Aguarda 3 segundos para dar tempo dos motores processarem a URL
-                    Thread.sleep(300);
+                    Thread.sleep(3000);
 
                     return buscarResultadoAnalise(analysisId);
                 }

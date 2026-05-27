@@ -9,6 +9,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/sms")
+@CrossOrigin(origins = "*")
 public class SmsLinkController {
 
     private final SmsVerificationService smsVerificationService;

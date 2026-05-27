@@ -8,6 +8,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/links")
+@CrossOrigin(origins = "*")
 public class LinkController {
 
     private final LinkVerificationService service;

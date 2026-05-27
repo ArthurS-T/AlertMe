@@ -99,23 +99,20 @@ public class Trie {
             if (current == null) {
                 return new SearchResult(false, null);
             }
+        }
 
-            if (current.isEndOfDomain) {
-                // Se foi inserido pela API do VirusTotal e passou de 24 horas, expira
-                if ("VirusTotal".equalsIgnoreCase(current.source) &&
-                        current.createdAt.isBefore(java.time.LocalDateTime.now().minusHours(24))) {
-
-                    current.isEndOfDomain = false; // Reseta o nó na memória
-                    System.out.println("[Trie Cache] Link expirou da memória RAM após 24h: " + normalizedDomain);
-                    return new SearchResult(false, null);
-                }
-                return new SearchResult(true, current.source);
+        if (current.isEndOfDomain) {
+            // Verifica o dominio encontrado, se for do VirusTotal e tiver mais de 24h, remove da Trie e atualiza para evitar falsos positivos
+            if ("VirusTotal".equalsIgnoreCase(current.source) &&
+                    current.createdAt.isBefore(java.time.LocalDateTime.now().minusHours(24))) {
+                current.isEndOfDomain = false; 
+                System.out.println("[Trie Cache] Link expirou da memória RAM após 24h: " + normalizedDomain);
+                return new SearchResult(false, null);
             }
+            return new SearchResult(true, current.source);
         }
         return new SearchResult(false, null);
     }
 
-    // Classe auxiliar para o retorno da busca
-    public record SearchResult(boolean found, String source) {
-    }
+    public record SearchResult(boolean found, String source) {}
 }

@@ -23,49 +23,65 @@ public class LinkVerificationService {
         trie.insert("phishing.com", "STATIC");
     }
 
+    // Método para extrair o domínio puro de uma URL, removendo protocolo, www e subpastas
+    private String extrairDominioPuro(String url) {
+        if (url == null) return "";
+        String clean = url.toLowerCase().trim();
+        clean = clean.replaceFirst("^(https?://)", "");
+        clean = clean.replaceFirst("^(www\\.)", "");
+        int slashIndex = clean.indexOf('/');
+        if (slashIndex != -1) {
+            clean = clean.substring(0, slashIndex);
+        }
+        return clean;
+    }
+
     public Links verifyLink(String url) {
         if (url == null || url.trim().isEmpty()){
             return new Links(url, false, "URL inválida ou vazia");
         }
 
-        // Verifica se o link já existe no Banco de Dados
-        Optional<Links> linkExistente = repository.findByUrl(url);
+        String dominioPuro = extrairDominioPuro(url);
+
+        // 1. Procura na Trie primeiro (Memória RAM)
+        Trie.SearchResult trieResult = trie.search(dominioPuro);
+        if (trieResult.found()) {
+            return registrarBanco(dominioPuro, true, "Detectado na lista maliciosa (" + trieResult.source() + ")");
+        }
+
+        // 2. Procura no Banco de Dados pelo domínio padronizado
+        Optional<Links> linkExistente = repository.findByUrl(dominioPuro);
         if (linkExistente.isPresent()) {
             return linkExistente.get();
         }
 
-        Trie.SearchResult trieResult = trie.search(url);
-        if (trieResult.found()) {
-            return registrarBanco(url, true, "Detectado na lista maliciosa (" + trieResult.source() + ")");
-        }
-
+        // 3. Consulta Externa se passar pelos caches locais
         boolean isMaliciousVT = virusTotalService.checkUrlIsMalicious(url);
 
         if (isMaliciousVT) {
-            trie.insert(url, "VirusTotal");
-            return registrarBanco(url, true, "Detectado pela API VirusTotal");
+            trie.insert(dominioPuro, "VirusTotal");
+            return registrarBanco(dominioPuro, true, "Detectado pela API VirusTotal");
         }
 
-        return registrarBanco(url, false, "Link seguro");
+        return registrarBanco(dominioPuro, false, "Link seguro");
     }
 
     private Links registrarBanco(String url, boolean isSuspicious, String reason) {
-        try{
-        Links record = new Links(url, isSuspicious, reason);
-        return repository.save(record); // Salva diretamente no PostgreSQL
+        try {
+            Links record = new Links(url, isSuspicious, reason);
+            return repository.save(record); 
         } catch (org.springframework.dao.DataIntegrityViolationException e) {
-            // Se outra thread salvou o mesmo link frações de segundo antes, busca o registro existente
             return repository.findByUrl(url).orElse(new Links(url, isSuspicious, reason));
         }
     }
 
     public List<Links> getHistory() {
-        return repository.findAll(); // Busca todos os registros do PostgreSQL
+        return repository.findAll(); 
     }
 
-    // Consulta se o link já foi banido e está guardado na memória da árvore Trie
     public boolean checkUrlIsMaliciousLocal(String url) {
-        Trie.SearchResult trieResult = trie.search(url);
+        String dominioPuro = extrairDominioPuro(url);
+        Trie.SearchResult trieResult = trie.search(dominioPuro);
         return trieResult.found();
     }
 }

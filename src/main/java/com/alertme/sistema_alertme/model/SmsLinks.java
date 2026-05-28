@@ -5,7 +5,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "tb_sms_links", indexes = {
-    @Index(name = "idx_checked_at", columnList = "checkedAt") // Index para que a busca por historico seja mais rápida
+@Index(name = "idx_checked_at", columnList = "checkedAt") // Index para que a busca por historico seja mais rápida
 })
 public class SmsLinks {
 
@@ -17,6 +17,7 @@ public class SmsLinks {
     private String smsText;
 
     private String extractedUrl;
+    @com.fasterxml.jackson.annotation.JsonProperty("isSuspicious") // Para garantir que o JSON tenha a propriedade "isSuspicious"
     private boolean isSuspicious;
     private String reason;
     private LocalDateTime checkedAt;
@@ -36,6 +37,7 @@ public class SmsLinks {
     public Long getId() { return id; }
     public String getSmsText() { return smsText; }
     public String getExtractedUrl() { return extractedUrl; }
+    @com.fasterxml.jackson.annotation.JsonProperty("isSuspicious")
     public boolean isSuspicious() { return isSuspicious; }
     public String getReason() { return reason; }
     public LocalDateTime getCheckedAt() { return checkedAt; }

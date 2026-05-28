@@ -25,6 +25,19 @@ public class SmsVerificationService {
         this.linkVerificationService = linkVerificationService;
     }
 
+    // Remoção de protocolo, www e subpastas 
+    private String extrairDominioPuro(String url) {
+        if (url == null) return "";
+        String clean = url.toLowerCase().trim();
+        clean = clean.replaceFirst("^(https?://)", "");
+        clean = clean.replaceFirst("^(www\\.)", "");
+        int slashIndex = clean.indexOf('/');
+        if (slashIndex != -1) {
+            clean = clean.substring(0, slashIndex);
+        }
+        return clean;
+    }
+
     public SmsLinks verifySmsText(String smsText) {
         if (smsText == null || smsText.trim().isEmpty()) {
             throw new IllegalArgumentException("O texto do SMS não pode estar vazio.");
@@ -45,10 +58,13 @@ public class SmsVerificationService {
             return smsRepository.save(smsSeguro);
         }
 
-        // Filtro local (Garante que se salvou na tb_links, o SMS também bloqueia)
-        boolean isLocalMalicious = linkVerificationService.checkUrlIsMaliciousLocal(extractedUrl);
+        // Tratamento da URL extraida para obter o domínio puro, garantindo que a Trie e o banco de dados sejam consultados corretamente
+        String dominioPuro = extrairDominioPuro(extractedUrl);
+
+        // Garante que se salvou na tabela de links, o SMS também bloqueia
+        boolean isLocalMalicious = linkVerificationService.checkUrlIsMaliciousLocal(dominioPuro);
         if (isLocalMalicious) {
-            SmsLinks smsBloqueadoLocal = new SmsLinks(smsText, extractedUrl, true, "Bloqueado: Link contido no SMS pertence a um domínio marcado como ameaça.");
+            SmsLinks smsBloqueadoLocal = new SmsLinks(smsText, dominioPuro, true, "Bloqueado: Link contido no SMS pertence a um domínio marcado como ameaça.");
             return smsRepository.save(smsBloqueadoLocal);
         }
 
@@ -57,11 +73,11 @@ public class SmsVerificationService {
         if (isMaliciousByVT) {
             linkVerificationService.verifyLink(extractedUrl); // Atualiza a Trie e salva no banco de dados de links maliciosos
 
-            SmsLinks smsMalicioso = new SmsLinks(smsText, extractedUrl, true, "Bloqueado: Link malicioso detectado dentro do SMS, pela API VirusTotal.");
+            SmsLinks smsMalicioso = new SmsLinks(smsText, dominioPuro, true, "Bloqueado: Link malicioso detectado dentro do SMS, pela API VirusTotal.");
             return smsRepository.save(smsMalicioso);
         }
 
-        SmsLinks smsLinkSeguro = new SmsLinks(smsText, extractedUrl, false, "SMS Verificado: O link contido na mensagem parece seguro.");
+        SmsLinks smsLinkSeguro = new SmsLinks(smsText, dominioPuro, false, "SMS Verificado: O link contido na mensagem parece seguro.");
         return smsRepository.save(smsLinkSeguro);
     }
 

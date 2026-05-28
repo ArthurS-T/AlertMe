@@ -2,6 +2,8 @@ package com.alertme.sistema_alertme.controller;
 
 import com.alertme.sistema_alertme.model.Links;
 import com.alertme.sistema_alertme.service.LinkVerificationService;
+
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,8 +20,19 @@ public class LinkController {
     }
 
     @PostMapping("/verificar")
-    public Links verificar(@RequestBody Links LinkRequest) {
-        return service.verifyLink(LinkRequest.getUrl());
+    public ResponseEntity<Links> verificar(@RequestBody java.util.Map<String, String> request) {
+        // Validação de segurança para evitar NullPointerException
+        if (request == null || !request.containsKey("url")) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        String urlValue = request.get("url");
+        if (urlValue == null || urlValue.trim().isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        Links resultado = service.verifyLink(urlValue);
+        return ResponseEntity.ok(resultado);
     }
 
     @GetMapping("/historico")

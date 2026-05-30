@@ -16,18 +16,21 @@ public class SmsVerificationService {
     private final LinkVerificationService linkVerificationService;
 
     // Expressão regular para capturar domínios e URLs dentro do texto
-    private static final String URL_REGEX = "https?://[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,6}(/[a-zA-Z0-9._%+-]*)*";
-    private static final Pattern pattern = Pattern.compile(URL_REGEX, Pattern.CASE_INSENSITIVE);
+    private static final Pattern URL_PATTERN = Pattern.compile(
+            "(https?://(?:www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{1,256}\\.[a-zA-Z0-9()]{2,24}\\b(?:[-a-zA-Z0-9()@:%_\\+.~#?&//=]*))",
+            Pattern.CASE_INSENSITIVE);
 
-    public SmsVerificationService(SmsRepository smsRepository, VirusTotalService virusTotalService, LinkVerificationService linkVerificationService) {
+    public SmsVerificationService(SmsRepository smsRepository, VirusTotalService virusTotalService,
+            LinkVerificationService linkVerificationService) {
         this.smsRepository = smsRepository;
         this.virusTotalService = virusTotalService;
         this.linkVerificationService = linkVerificationService;
     }
 
-    // Remoção de protocolo, www e subpastas 
+    // Remoção de protocolo, www e subpastas
     private String extrairDominioPuro(String url) {
-        if (url == null) return "";
+        if (url == null)
+            return "";
         String clean = url.toLowerCase().trim();
         clean = clean.replaceFirst("^(https?://)", "");
         clean = clean.replaceFirst("^(www\\.)", "");
@@ -43,7 +46,7 @@ public class SmsVerificationService {
             throw new IllegalArgumentException("O texto do SMS não pode estar vazio.");
         }
 
-        Matcher matcher = pattern.matcher(smsText);
+        Matcher matcher = URL_PATTERN.matcher(smsText);
         String extractedUrl = null;
 
         if (matcher.find()) {
@@ -54,31 +57,56 @@ public class SmsVerificationService {
         }
 
         if (extractedUrl == null) {
-            SmsLinks smsSeguro = new SmsLinks(smsText, null, false, "SMS Seguro: Nenhuma URL encontrada.");
+            SmsLinks smsSeguro = new SmsLinks(smsText, null, false, "SMS sem nenhum link/URL encontrado.");
             return smsRepository.save(smsSeguro);
         }
 
-        // Tratamento da URL extraida para obter o domínio puro, garantindo que a Trie e o banco de dados sejam consultados corretamente
+        // Tratamento da URL extraida para obter o domínio puro
         String dominioPuro = extrairDominioPuro(extractedUrl);
 
-        // Garante que se salvou na tabela de links, o SMS também bloqueia
-        boolean isLocalMalicious = linkVerificationService.checkUrlIsMaliciousLocal(dominioPuro);
-        if (isLocalMalicious) {
-            SmsLinks smsBloqueadoLocal = new SmsLinks(smsText, dominioPuro, true, "Bloqueado: Link contido no SMS pertence a um domínio marcado como ameaça.");
-            return smsRepository.save(smsBloqueadoLocal);
+        try {
+            // Consulta a Trie e Banco de Dados local
+            boolean isLocalMalicious = linkVerificationService.checkUrlIsMaliciousLocal(dominioPuro);
+            if (isLocalMalicious) {
+                SmsLinks smsBloqueadoLocal = new SmsLinks(
+                        smsText,
+                        dominioPuro,
+                        true,
+                        "Bloqueado: Link contido no SMS pertence a um domínio já marcado como ameaça.");
+                return smsRepository.save(smsBloqueadoLocal);
+            }
+
+            // Consulta na API VirusTotal
+            boolean isMaliciousByVT = virusTotalService.checkUrlIsMalicious(extractedUrl);
+
+            if (isMaliciousByVT) {
+                // Sincroniza a Trie local e Banco de links com a nova ameaça descoberta
+                linkVerificationService.verifyLink(extractedUrl);
+
+                SmsLinks smsMalicioso = new SmsLinks(
+                        smsText,
+                        dominioPuro,
+                        true,
+                        "Bloqueado: Link malicioso detectado dentro do SMS pela API VirusTotal.");
+                return smsRepository.save(smsMalicioso);
+            }
+
+            SmsLinks smsLinkSeguro = new SmsLinks(
+                    smsText,
+                    dominioPuro,
+                    false,
+                    "SMS Verificado: O link contido na mensagem parece seguro.");
+            return smsRepository.save(smsLinkSeguro);
+
+        } catch (Exception e) {
+            System.err.println("[MSG ERRO] Falha ao processar motores de verificação: " + e.getMessage());
+
+            return new SmsLinks(
+                    smsText,
+                    dominioPuro,
+                    true, // Marcado como true para o frontend tratar como aviso/perigo
+                    "Erro: Não foi possível encontrar ou validar a reputação do link contido no SMS devido a uma oscilação na API de segurança.");
         }
-
-        // Consulta externa na API
-        boolean isMaliciousByVT = virusTotalService.checkUrlIsMalicious(extractedUrl);
-        if (isMaliciousByVT) {
-            linkVerificationService.verifyLink(extractedUrl); // Atualiza a Trie e salva no banco de dados de links maliciosos
-
-            SmsLinks smsMalicioso = new SmsLinks(smsText, dominioPuro, true, "Bloqueado: Link malicioso detectado dentro do SMS, pela API VirusTotal.");
-            return smsRepository.save(smsMalicioso);
-        }
-
-        SmsLinks smsLinkSeguro = new SmsLinks(smsText, dominioPuro, false, "SMS Verificado: O link contido na mensagem parece seguro.");
-        return smsRepository.save(smsLinkSeguro);
     }
 
     public List<SmsLinks> getAllMessages() {

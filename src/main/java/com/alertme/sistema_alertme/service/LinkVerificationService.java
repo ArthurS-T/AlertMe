@@ -3,8 +3,12 @@ package com.alertme.sistema_alertme.service;
 import com.alertme.sistema_alertme.model.Links;
 import com.alertme.sistema_alertme.repository.LinkRepository;
 import com.alertme.sistema_alertme.service.arvore.Trie;
+
+import tools.jackson.databind.ObjectMapper;
+
 import org.springframework.stereotype.Service;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -13,21 +17,21 @@ public class LinkVerificationService {
     private final Trie trie = new Trie();
     private final LinkRepository repository; // Injeção do Repository
     private final VirusTotalService virusTotalService; // Integrando o serviço do VirusTotal
+    private final GeminiService geminiService; // Injeção do Gemini
+    private final ObjectMapper objectMapper = new ObjectMapper(); // Para ler o JSON da IA
 
-    public LinkVerificationService(LinkRepository repository, VirusTotalService virusTotalService) {
+    public LinkVerificationService(LinkRepository repository, VirusTotalService virusTotalService, GeminiService geminiService) {
         this.repository = repository;
         this.virusTotalService = virusTotalService;
+        this.geminiService = geminiService;
 
-        // Teste inicial estático na Trie
         trie.insert("malware.com", "STATIC");
         trie.insert("phishing.com", "STATIC");
     }
 
-    // Método para extrair o domínio puro de uma URL, removendo protocolo, www e
-    // subpastas
+    // Método para extrair o domínio puro de uma URL, removendo protocolo, www e subpastas
     private String extrairDominioPuro(String url) {
-        if (url == null)
-            return "";
+        if (url == null) return "";
         String clean = url.toLowerCase().trim();
         clean = clean.replaceFirst("^(https?://)", "");
         clean = clean.replaceFirst("^(www\\.)", "");
@@ -48,7 +52,8 @@ public class LinkVerificationService {
         // Procura na Trie primeiro
         Trie.SearchResult trieResult = trie.search(dominioPuro);
         if (trieResult.found()) {
-            return registrarBanco(dominioPuro, true, "Detectado na lista maliciosa (" + trieResult.source() + ")");
+            String explicacaoIA = extrairMotivoDaIA(geminiService.explicarUrl(dominioPuro, 5, 0), "Detectado na lista maliciosa local.");
+            return registrarBanco(dominioPuro, true, explicacaoIA);
         }
 
         // Procura no Banco de Dados
@@ -57,25 +62,41 @@ public class LinkVerificationService {
             return linkExistente.get();
         }
 
-        // Consulta na API se passou pelos motores
+        // Consulta na API VirusTotal + IA Gemini
         try {
-            boolean isMaliciousVT = virusTotalService.checkUrlIsMalicious(url);
+            VirusTotalService.VTResult vtResult = virusTotalService.checkUrlIsMalicious(url);
+            
+            // Passa os dados VirusTotal pro Gemini
+            String jsonBrutoDaIA = geminiService.explicarUrl(dominioPuro, vtResult.maliciousCount(), vtResult.suspiciousCount());
+            
+            // Retira a string do motivo de dentro do JSON retornado pela IA
+            String motivoExplicadoPelaIA = extrairMotivoDaIA(jsonBrutoDaIA, vtResult.isMalicious() ? "Detectado pela API VirusTotal" : "Link seguro");
 
-            if (isMaliciousVT) {
+            if (vtResult.isMalicious()) {
                 trie.insert(dominioPuro, "VirusTotal");
-                return registrarBanco(dominioPuro, true, "Detectado pela API VirusTotal");
+                return registrarBanco(dominioPuro, true, motivoExplicadoPelaIA);
             }
 
-            return registrarBanco(dominioPuro, false, "Link seguro");
+            return registrarBanco(dominioPuro, false, motivoExplicadoPelaIA);
 
         } catch (Exception e) {
-            System.err.println("[MSG ERRO] Falha ao conectar ao VirusTotal: " + e.getMessage());
-
-            return new Links(
-                    url,
-                    true, // Alerta o usuário preventivamente
-                    "Erro: Não foi possível validar a URL. O motor de análise externa está temporariamente indisponível.");
+            System.err.println("[MSG ERRO] Falha ao conectar aos serviços externos: " + e.getMessage());
+            return new Links(url, true, "Erro: Não foi possível validar a URL na nuvem de segurança.");
         }
+    }
+
+    // Método para ler a string JSON gerada pela IA e isolar apenas 'reason'
+
+    private String extrairMotivoDaIA(String jsonIA, String fallback) {
+        try {
+            Map<String, Object> mapa = objectMapper.readValue(jsonIA, Map.class);
+            if (mapa != null && mapa.containsKey("reason")) {
+                return (String) mapa.get("reason");
+            }
+        } catch (Exception e) {
+            System.err.println("Erro ao fazer o parse do JSON da IA: " + e.getMessage());
+        }
+        return fallback;
     }
 
     private Links registrarBanco(String url, boolean isSuspicious, String reason) {
@@ -87,9 +108,7 @@ public class LinkVerificationService {
         }
     }
 
-    public List<Links> getHistory() {
-        return repository.findAll();
-    }
+    public List<Links> getHistory() { return repository.findAll(); }
 
     public boolean checkUrlIsMaliciousLocal(String url) {
         String dominioPuro = extrairDominioPuro(url);

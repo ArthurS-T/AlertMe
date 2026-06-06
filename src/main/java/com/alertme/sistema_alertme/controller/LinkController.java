@@ -21,7 +21,6 @@ public class LinkController {
 
     @PostMapping("/verificar")
     public ResponseEntity<Links> verificar(@RequestBody java.util.Map<String, String> request) {
-        // Validação de segurança para evitar NullPointerException
         if (request == null || !request.containsKey("url")) {
             return ResponseEntity.badRequest().build();
         }

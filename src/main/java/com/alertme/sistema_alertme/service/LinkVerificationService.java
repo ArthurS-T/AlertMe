@@ -30,7 +30,8 @@ public class LinkVerificationService {
         trie.insert("phishing.com", "STATIC");
     }
 
-    // Método para extrair o domínio puro de uma URL, removendo protocolo, www e subpastas
+    // Método para extrair o domínio puro de uma URL, removendo protocolo, www e
+    // subpastas
     private String extrairDominioPuro(String url) {
         if (url == null)
             return "";
@@ -69,15 +70,16 @@ public class LinkVerificationService {
         try {
             VirusTotalService.VTResult vtResult = virusTotalService.checkUrlIsMalicious(url);
 
-            // Passa os dados VirusTotal pro Gemini
+            if (vtResult.maliciousCount() == 0 && vtResult.suspiciousCount() == 0) {
+                return registrarBanco(dominioPuro, false, "Link seguro. Nenhuma ameaça detectada.");
+            }
+
+            // Pelo menos 1 alerta no VirusTotal, chama a IA para explicar.
             String jsonBrutoDaIA = geminiService.explicarUrl(dominioPuro, vtResult.maliciousCount(),
                     vtResult.suspiciousCount());
 
-            // Extrai o motivo didático
             String motivoExplicadoPelaIA = extrairMotivoDaIA(jsonBrutoDaIA,
-                    vtResult.isMalicious() ? "Detectado pela API VirusTotal" : "Link seguro");
-
-            // Extrai o veredito final combinando VirusTotal e IA
+                    "Detectado como ameaça em análises globais.");
             boolean vereditoFinalSuspeito = vtResult.isMalicious() || extrairStatusDaIA(jsonBrutoDaIA, false);
 
             if (vereditoFinalSuspeito) {

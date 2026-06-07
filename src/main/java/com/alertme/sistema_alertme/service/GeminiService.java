@@ -18,7 +18,7 @@ public class GeminiService {
     private String apiKey;
 
     private final RestTemplate restTemplate = new RestTemplate();
-    
+
     private final tools.jackson.databind.ObjectMapper objectMapper = new tools.jackson.databind.ObjectMapper();
 
     // URL da API do Gemini Flash
@@ -49,19 +49,26 @@ public class GeminiService {
         if (apiKey == null || apiKey.trim().isEmpty() || apiKey.equals("${GEMINI_API_KEY}")) {
             System.err.println("[Gemini DEBUG] A chave API_KEY está nula ou ausente!");
             boolean perigo = (maliciosos > 0 || suspeitos > 0);
-            return "{\"isSuspicious\": " + perigo + ", \"reason\": \"Link analisado pelos motores locais (IA indisponível).\"}";
+            return "{\"isSuspicious\": " + perigo
+                    + ", \"reason\": \"Link analisado pelos motores locais (IA indisponível).\"}";
         }
 
         String prompt;
+
         if (maliciosos == 0 && suspeitos == 0) {
             prompt = "Você é um especialista em segurança digital do sistema AlertMe. "
-                    + "A URL [" + urlAlvo + "] passou limpa pelas verificações globais do VirusTotal (0 ameaças encontradas). "
-                    + "Gere um JSON com as chaves exatas: 'isSuspicious' (boolean, que deve ser false) e 'reason' (uma explicação curta, rica e didática em português para todos sobre por que este link específico parece seguro e quais indícios mostram que ele é confiável). "
-                    + "Retorne apenas o JSON puro, sem markdown.";
+                    + "A URL [" + urlAlvo + "] não possui registros de ameaças nos motores locais do VirusTotal. "
+                    + "Gere um JSON com as chaves exatas: 'isSuspicious' (boolean) e 'reason' (string didática em português). "
+                    + "REGRAS DE ANÁLISE COMPORTAMENTAL: "
+                    + "1. Se o nome do domínio parecer legítimo (ex: google.com, uol.com.br), defina 'isSuspicious' como false e crie uma explicação curta separada em tópicos com emoticons (1️⃣, 2️⃣, etc.) mostrando por que ele transmite confiança. "
+                    + "2. Se o nome do domínio possuir termos altamente suspeitos, erros ortográficos propositais, promessas exageradas ou cara de fraude (ex: 'recarga-gratis', 'atualize-sua-conta-aqui', domínios muito estranhos), defina 'isSuspicious' como true. Explique na 'reason' (em tópicos 1️⃣, 2️⃣, etc.) que, embora não conste no VirusTotal, o nome do link indica uma forte suspeita de golpe ou página criada recentemente para fraude. "
+                    + "IMPORTANTE NA FORMATAÇÃO: Separe cada tópico ou ponto da 'reason' pulando uma linha dupla, começando estritamente com os emoticons numéricos (1️⃣, 2️⃣, 3️⃣) em uma nova linha. Retorne apenas o JSON puro, sem markdown.";
         } else {
             prompt = "Você é um especialista em segurança digital do sistema AlertMe. "
-                    + "A URL [" + urlAlvo + "] foi marcada por " + maliciosos + " motores como maliciosa e " + suspeitos + " como suspeita no VirusTotal. "
-                    + "Gere um JSON com as chaves exatas: 'isSuspicious' (boolean, que deve ser true) e 'reason' (uma explicação curta, rica e visualmente didática em português detalhando quais indícios provam que este link é uma ameaça de engenharia social, roubo de dados ou clonagem). "
+                    + "A URL [" + urlAlvo + "] foi marcada por " + maliciosos + " motores como maliciosa e " + suspeitos
+                    + " como suspeita no VirusTotal. "
+                    + "Gere um JSON com as chaves exatas: 'isSuspicious' (boolean, que deve ser true) e 'reason' (uma explicação didática detalhando a ameaça). "
+                    + "IMPORTANTE NA FORMATAÇÃO: Separe cada risco identificado pulando uma linha dupla, começando estritamente com os emoticons numéricos (1️⃣, 2️⃣, 3️⃣) em uma nova linha. "
                     + "Retorne apenas o JSON puro, sem markdown.";
         }
 
@@ -69,12 +76,12 @@ public class GeminiService {
             return enviarRequisicao(prompt);
         } catch (Exception e) {
             System.err.println("[Gemini DEBUG] Erro crítico na chamada da API: " + e.getMessage());
-            
+
             // Garantir que mesmo em caso de falha da IA, o sistema retorna uma resposta coerente baseada nos dados disponíveis do VirusTotal
             boolean perigoReal = (maliciosos > 0 || suspeitos > 0);
-            String mensagemFallback = perigoReal 
-                ? "Atenção: Este link foi bloqueado porque apresenta sérios indícios de engenharia social, clonagem de páginas ou roubo de credenciais." 
-                : "Este link parece seguro para navegação. Não encontramos registros de fraudes ou ameaças ativas associadas a ele.";
+            String mensagemFallback = perigoReal
+                    ? "Atenção: Este link foi bloqueado porque apresenta sérios indícios de engenharia social, clonagem de páginas ou roubo de credenciais."
+                    : "Este link parece seguro para navegação. Não encontramos registros de fraudes ou ameaças ativas associadas a ele.";
 
             return "{\"isSuspicious\": " + perigoReal + ", \"reason\": \"" + mensagemFallback + "\"}";
         }
@@ -84,14 +91,14 @@ public class GeminiService {
     private String enviarRequisicao(String prompt) throws Exception {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        
+
         String chaveLimpa = apiKey.replaceAll("\\s+", "").trim();
         headers.set("X-goog-api-key", chaveLimpa);
 
         String promptSanitizado = prompt.replace("\\", "\\\\")
-                                        .replace("\"", "\\\"")
-                                        .replace("\n", "\\n")
-                                        .replace("\r", "\\r");
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r");
 
         String jsonCorpo = "{\n" +
                 "  \"contents\": [\n" +
@@ -108,7 +115,8 @@ public class GeminiService {
         HttpEntity<String> entity = new HttpEntity<>(jsonCorpo, headers);
 
         try {
-            ResponseEntity<Map> responseEntity = restTemplate.exchange(API_URL, org.springframework.http.HttpMethod.POST, entity, Map.class);
+            ResponseEntity<Map> responseEntity = restTemplate.exchange(API_URL,
+                    org.springframework.http.HttpMethod.POST, entity, Map.class);
             Map<String, Object> response = responseEntity.getBody();
 
             if (response == null || !response.containsKey("candidates")) {
@@ -117,7 +125,7 @@ public class GeminiService {
 
             tools.jackson.databind.JsonNode rootNode = objectMapper.valueToTree(response);
             String textoPuro = rootNode.path("candidates").path(0).path("content").path("parts").path(0).path("text").asText();
-          
+
             // Limpando formatação pra garantir o JSON puro
             if (textoPuro.contains("```")) {
                 textoPuro = textoPuro.replaceAll("```json", "").replaceAll("```", "").trim();

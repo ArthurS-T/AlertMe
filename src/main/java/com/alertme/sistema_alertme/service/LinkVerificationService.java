@@ -30,11 +30,9 @@ public class LinkVerificationService {
         trie.insert("phishing.com", "STATIC");
     }
 
-    // Método para extrair o domínio puro de uma URL, removendo protocolo, www e
-    // subpastas
+    // Método para extrair o domínio puro de uma URL, removendo protocolo, www e subpastas
     private String extrairDominioPuro(String url) {
-        if (url == null)
-            return "";
+        if (url == null) return "";
         String clean = url.toLowerCase().trim();
         clean = clean.replaceFirst("^(https?://)", "");
         clean = clean.replaceFirst("^(www\\.)", "");
@@ -55,8 +53,8 @@ public class LinkVerificationService {
         // Procura na Trie primeiro
         Trie.SearchResult trieResult = trie.search(dominioPuro);
         if (trieResult.found()) {
-            String explicacaoIA = extrairMotivoDaIA(geminiService.explicarUrl(dominioPuro, 5, 0),
-                    "Detectado na lista maliciosa local.");
+            String explicacaoIA = extrairMotivoDaIA(geminiService.explicarUrl(dominioPuro, 5, 0), 
+                "Detectado na lista maliciosa local.");
             return registrarBanco(dominioPuro, true, explicacaoIA);
         }
 
@@ -70,16 +68,17 @@ public class LinkVerificationService {
         try {
             VirusTotalService.VTResult vtResult = virusTotalService.checkUrlIsMalicious(url);
 
-            if (vtResult.maliciousCount() == 0 && vtResult.suspiciousCount() == 0) {
-                return registrarBanco(dominioPuro, false, "Link seguro. Nenhuma ameaça detectada.");
+            // Passa os dados para o Gemini gerar a explicação
+            String jsonBrutoDaIA = geminiService.explicarUrl(dominioPuro, vtResult.maliciousCount(), vtResult.suspiciousCount());
+
+            // Limpa o JSON da IA caso venha com markdown
+            if (jsonBrutoDaIA.contains("```")) {
+                jsonBrutoDaIA = jsonBrutoDaIA.replaceAll("```json", "").replaceAll("```", "").trim();
             }
 
-            // Pelo menos 1 alerta no VirusTotal, chama a IA para explicar.
-            String jsonBrutoDaIA = geminiService.explicarUrl(dominioPuro, vtResult.maliciousCount(),
-                    vtResult.suspiciousCount());
-
+            // Extrai os dados do JSON devolvido pela IA
             String motivoExplicadoPelaIA = extrairMotivoDaIA(jsonBrutoDaIA,
-                    "Detectado como ameaça em análises globais.");
+                    vtResult.isMalicious() ? "Detectado pela API VirusTotal" : "Link seguro");
             boolean vereditoFinalSuspeito = vtResult.isMalicious() || extrairStatusDaIA(jsonBrutoDaIA, false);
 
             if (vereditoFinalSuspeito) {
@@ -90,6 +89,7 @@ public class LinkVerificationService {
                 return registrarBanco(dominioPuro, true, motivoExplicadoPelaIA);
             }
 
+            // Se a IA e o VirusTotal concordam que é seguro, registra como falso
             return registrarBanco(dominioPuro, false, motivoExplicadoPelaIA);
 
         } catch (Exception e) {

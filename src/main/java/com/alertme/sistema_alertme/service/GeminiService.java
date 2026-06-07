@@ -17,18 +17,24 @@ public class GeminiService {
     private String apiKey;
 
     private final RestTemplate restTemplate = new RestTemplate();
+
     // URL base da API Gemini
-    private final String API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=";
+    private final String API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=";
 
     // Analisa o contexto de mensagens de texto (SMS)
     public String analisarTexto(String texto) {
-        String url = API_URL + apiKey;
+        // Validação preventiva para o Render
+        if (apiKey == null || apiKey.trim().isEmpty() || apiKey.equals("${GEMINI_API_KEY}")) {
+            System.err.println("[Gemini DEBUG] A chave API_KEY está nula ou não foi lida do ambiente!");
+            return "{\"isSuspicious\": false, \"reason\": \"Análise textual indisponível (Chave de API ausente).\"}";
+        }
+
+        String url = API_URL + apiKey.trim();
 
         String prompt = "Você é um especialista em segurança digital do sistema AlertMe. "
                 + "Analise o seguinte texto e identifique indícios de Engenharia Social ou 'Golpe do Presente'. "
                 + "Responda estritamente em JSON com as chaves: 'isSuspicious' (boolean) e 'reason' (string didática em português). "
-                + "Retorne apenas o JSON puro, sem markdown. "
-                + "Texto: " + texto;
+                + "Retorne apenas o JSON puro, sem markdown. " + "Texto: " + texto;
 
         try {
             return enviarRequisicao(url, prompt);
@@ -39,17 +45,24 @@ public class GeminiService {
 
     // Explica o perigo de uma URL com base nos dados do VirusTotal
     public String explicarUrl(String urlAlvo, int maliciosos, int suspeitos) {
-        String url = API_URL + apiKey;
+        // Validação preventiva para o Render
+        if (apiKey == null || apiKey.trim().isEmpty() || apiKey.equals("${GEMINI_API_KEY}")) {
+            System.err.println("[Gemini Error] A chave API_KEY está nula ou não foi lida do ambiente!");
+            boolean perigo = (maliciosos > 0 || suspeitos > 0);
+            return "{\"isSuspicious\": " + perigo + ", \"reason\": \"Link analisado pelos motores locais (IA indisponível).\"}";
+        }
+
+        String url = API_URL + apiKey.trim();
         String prompt;
 
         if (maliciosos == 0 && suspeitos == 0) {
             prompt = "Você é um especialista em segurança digital do sistema AlertMe. "
-                    + "A URL [" + urlAlvo+ "] passou limpa pelas verificações globais do VirusTotal (0 ameaças encontradas). "
+                    + "A URL [" + urlAlvo + "] passou limpa pelas verificações globais do VirusTotal (0 ameaças encontradas). "
                     + "Gere um JSON com: 'isSuspicious' (boolean, que deve ser false) e 'reason' (uma explicação curta, amigável e didática em português para leigos sobre por que este link parece seguro para navegar). "
                     + "Retorne apenas o JSON puro, sem markdown.";
         } else {
             prompt = "Você é um especialista em segurança digital do sistema AlertMe. "
-                    + "A URL [" + urlAlvo + "] foi marcada por " + maliciosos + " motores como maliciosa e " + suspeitos+ " como suspeita no VirusTotal. "
+                    + "A URL [" + urlAlvo + "] foi marcada por " + maliciosos + " motores como maliciosa e " + suspeitos + " como suspeita no VirusTotal. "
                     + "Gere um JSON com: 'isSuspicious' (boolean, que deve ser true) e 'reason' (explicação curta e didática em português sobre o risco de roubo de dados para leigos). "
                     + "Retorne apenas o JSON puro, sem markdown.";
         }

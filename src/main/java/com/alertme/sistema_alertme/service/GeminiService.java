@@ -9,8 +9,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.HttpClientErrorException;
 
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 @Service
@@ -23,20 +21,15 @@ public class GeminiService {
     
     private final tools.jackson.databind.ObjectMapper objectMapper = new tools.jackson.databind.ObjectMapper();
 
-    // URL base da API Gemini v1.5 Flash
-    private final String API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=";
+    // URL da API do Gemini Flash
+    private final String API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
 
     // Analisa o contexto de mensagens de texto (SMS)
     public String analisarTexto(String texto) {
-        // Validação preventiva para o Render
         if (apiKey == null || apiKey.trim().isEmpty() || apiKey.equals("${GEMINI_API_KEY}")) {
-            System.err.println("[Gemini DEBUG] A chave API_KEY está nula ou não foi lida do ambiente!");
+            System.err.println("[Gemini DEBUG] A chave API_KEY está nula ou ausente!");
             return "{\"isSuspicious\": false, \"reason\": \"Análise textual indisponível (Chave de API ausente).\"}";
         }
-
-        // Limpeza preventiva da chave para evitar erros de formatação na URL
-        String chaveLimpa = apiKey.replaceAll("\\s+", "").trim();
-        String url = API_URL + chaveLimpa;
 
         String prompt = "Você é um especialista em segurança digital do sistema AlertMe. "
                 + "Analise o seguinte texto e identifique indícios de Engenharia Social ou 'Golpe do Presente'. "
@@ -44,7 +37,7 @@ public class GeminiService {
                 + "Retorne apenas o JSON puro, sem markdown. " + "Texto: " + texto;
 
         try {
-            return enviarRequisicao(url, prompt);
+            return enviarRequisicao(prompt);
         } catch (Exception e) {
             System.err.println("[Gemini DEBUG] Erro ao analisar texto: " + e.getMessage());
             return "{\"isSuspicious\": false, \"reason\": \"Análise textual indisponível no momento.\"}";
@@ -53,17 +46,13 @@ public class GeminiService {
 
     // Explica o perigo de uma URL com base nos dados do VirusTotal
     public String explicarUrl(String urlAlvo, int maliciosos, int suspeitos) {
-        // Validação preventiva para o Render
         if (apiKey == null || apiKey.trim().isEmpty() || apiKey.equals("${GEMINI_API_KEY}")) {
-            System.err.println("[Gemini DEBUG] A chave API_KEY está nula ou não foi lida do ambiente!");
+            System.err.println("[Gemini DEBUG] A chave API_KEY está nula ou ausente!");
             boolean perigo = (maliciosos > 0 || suspeitos > 0);
             return "{\"isSuspicious\": " + perigo + ", \"reason\": \"Link analisado pelos motores locais (IA indisponível).\"}";
         }
 
-        String chaveLimpa = apiKey.replaceAll("\\s+", "").trim();
-        String url = API_URL + chaveLimpa;
         String prompt;
-
         if (maliciosos == 0 && suspeitos == 0) {
             prompt = "Você é um especialista em segurança digital do sistema AlertMe. "
                     + "A URL [" + urlAlvo + "] passou limpa pelas verificações globais do VirusTotal (0 ameaças encontradas). "
@@ -77,7 +66,7 @@ public class GeminiService {
         }
 
         try {
-            return enviarRequisicao(url, prompt);
+            return enviarRequisicao(prompt);
         } catch (Exception e) {
             System.err.println("[Gemini DEBUG] Erro crítico na chamada da API: " + e.getMessage());
             
@@ -91,25 +80,35 @@ public class GeminiService {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private String enviarRequisicao(String url, String prompt) throws Exception {
+    // Método centralizado que agora envia a chave através de Headers HTTP
+    private String enviarRequisicao(String prompt) throws Exception {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
+        
+        String chaveLimpa = apiKey.replaceAll("\\s+", "").trim();
+        headers.set("X-goog-api-key", chaveLimpa);
 
-        // Montagem manual da árvore do JSON para evitar falhas
-        Map<String, Object> textPart = new HashMap<>();
-        textPart.put("text", prompt);
+        String promptSanitizado = prompt.replace("\\", "\\\\")
+                                        .replace("\"", "\\\"")
+                                        .replace("\n", "\\n")
+                                        .replace("\r", "\\r");
 
-        Map<String, Object> partsMap = new HashMap<>();
-        partsMap.put("parts", List.of(textPart));
+        String jsonCorpo = "{\n" +
+                "  \"contents\": [\n" +
+                "    {\n" +
+                "      \"parts\": [\n" +
+                "        {\n" +
+                "          \"text\": \"" + promptSanitizado + "\"\n" +
+                "        }\n" +
+                "      ]\n" +
+                "    }\n" +
+                "  ]\n" +
+                "}";
 
-        Map<String, Object> contents = new HashMap<>();
-        contents.put("contents", List.of(partsMap));
-
-        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(contents, headers);
+        HttpEntity<String> entity = new HttpEntity<>(jsonCorpo, headers);
 
         try {
-            ResponseEntity<Map> responseEntity = restTemplate.exchange(url, org.springframework.http.HttpMethod.POST, entity, Map.class);
+            ResponseEntity<Map> responseEntity = restTemplate.exchange(API_URL, org.springframework.http.HttpMethod.POST, entity, Map.class);
             Map<String, Object> response = responseEntity.getBody();
 
             if (response == null || !response.containsKey("candidates")) {
@@ -118,7 +117,7 @@ public class GeminiService {
 
             tools.jackson.databind.JsonNode rootNode = objectMapper.valueToTree(response);
             String textoPuro = rootNode.path("candidates").path(0).path("content").path("parts").path(0).path("text").asText();
-
+          
             // Limpando formatação pra garantir o JSON puro
             if (textoPuro.contains("```")) {
                 textoPuro = textoPuro.replaceAll("```json", "").replaceAll("```", "").trim();

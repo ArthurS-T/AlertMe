@@ -24,7 +24,7 @@ public class GeminiService {
     private final tools.jackson.databind.ObjectMapper objectMapper = new tools.jackson.databind.ObjectMapper();
 
     // URL base da API Gemini v1.5 Flash
-    private final String API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=";
+    private final String API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=";
 
     // Analisa o contexto de mensagens de texto (SMS)
     public String analisarTexto(String texto) {
@@ -34,7 +34,9 @@ public class GeminiService {
             return "{\"isSuspicious\": false, \"reason\": \"Análise textual indisponível (Chave de API ausente).\"}";
         }
 
-        String url = API_URL + apiKey.trim();
+        // Limpeza preventiva da chave para evitar erros de formatação na URL
+        String chaveLimpa = apiKey.replaceAll("\\s+", "").trim();
+        String url = API_URL + chaveLimpa;
 
         String prompt = "Você é um especialista em segurança digital do sistema AlertMe. "
                 + "Analise o seguinte texto e identifique indícios de Engenharia Social ou 'Golpe do Presente'. "
@@ -58,7 +60,8 @@ public class GeminiService {
             return "{\"isSuspicious\": " + perigo + ", \"reason\": \"Link analisado pelos motores locais (IA indisponível).\"}";
         }
 
-        String url = API_URL + apiKey.trim();
+        String chaveLimpa = apiKey.replaceAll("\\s+", "").trim();
+        String url = API_URL + chaveLimpa;
         String prompt;
 
         if (maliciosos == 0 && suspeitos == 0) {
@@ -88,7 +91,7 @@ public class GeminiService {
         }
     }
 
-    // Método de comunicação com a API do Google
+    @SuppressWarnings("unchecked")
     private String enviarRequisicao(String url, String prompt) throws Exception {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -106,7 +109,6 @@ public class GeminiService {
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(contents, headers);
 
         try {
-            // 
             ResponseEntity<Map> responseEntity = restTemplate.exchange(url, org.springframework.http.HttpMethod.POST, entity, Map.class);
             Map<String, Object> response = responseEntity.getBody();
 

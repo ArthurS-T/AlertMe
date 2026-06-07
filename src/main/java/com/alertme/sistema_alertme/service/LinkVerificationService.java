@@ -20,7 +20,8 @@ public class LinkVerificationService {
     private final GeminiService geminiService; // Injeção do Gemini
     private final ObjectMapper objectMapper = new ObjectMapper(); // Para ler o JSON da IA
 
-    public LinkVerificationService(LinkRepository repository, VirusTotalService virusTotalService, GeminiService geminiService) {
+    public LinkVerificationService(LinkRepository repository, VirusTotalService virusTotalService,
+            GeminiService geminiService) {
         this.repository = repository;
         this.virusTotalService = virusTotalService;
         this.geminiService = geminiService;
@@ -31,7 +32,8 @@ public class LinkVerificationService {
 
     // Método para extrair o domínio puro de uma URL, removendo protocolo, www e subpastas
     private String extrairDominioPuro(String url) {
-        if (url == null) return "";
+        if (url == null)
+            return "";
         String clean = url.toLowerCase().trim();
         clean = clean.replaceFirst("^(https?://)", "");
         clean = clean.replaceFirst("^(www\\.)", "");
@@ -52,7 +54,8 @@ public class LinkVerificationService {
         // Procura na Trie primeiro
         Trie.SearchResult trieResult = trie.search(dominioPuro);
         if (trieResult.found()) {
-            String explicacaoIA = extrairMotivoDaIA(geminiService.explicarUrl(dominioPuro, 5, 0), "Detectado na lista maliciosa local.");
+            String explicacaoIA = extrairMotivoDaIA(geminiService.explicarUrl(dominioPuro, 5, 0),
+                    "Detectado na lista maliciosa local.");
             return registrarBanco(dominioPuro, true, explicacaoIA);
         }
 
@@ -65,15 +68,23 @@ public class LinkVerificationService {
         // Consulta na API VirusTotal + IA Gemini
         try {
             VirusTotalService.VTResult vtResult = virusTotalService.checkUrlIsMalicious(url);
-            
-            // Passa os dados VirusTotal pro Gemini
-            String jsonBrutoDaIA = geminiService.explicarUrl(dominioPuro, vtResult.maliciousCount(), vtResult.suspiciousCount());
-            
-            // Retira a string do motivo de dentro do JSON retornado pela IA
-            String motivoExplicadoPelaIA = extrairMotivoDaIA(jsonBrutoDaIA, vtResult.isMalicious() ? "Detectado pela API VirusTotal" : "Link seguro");
 
-            if (vtResult.isMalicious()) {
-                trie.insert(dominioPuro, "VirusTotal");
+            // Passa os dados VirusTotal pro Gemini
+            String jsonBrutoDaIA = geminiService.explicarUrl(dominioPuro, vtResult.maliciousCount(),
+                    vtResult.suspiciousCount());
+
+            // Extrai o motivo didático
+            String motivoExplicadoPelaIA = extrairMotivoDaIA(jsonBrutoDaIA,
+                    vtResult.isMalicious() ? "Detectado pela API VirusTotal" : "Link seguro");
+
+            // Extrai o veredito final combinando VirusTotal e IA
+            boolean vereditoFinalSuspeito = vtResult.isMalicious() || extrairStatusDaIA(jsonBrutoDaIA, false);
+
+            if (vereditoFinalSuspeito) {
+                // Se o VirusTotal confirmou a ameaça, alimenta a árvore Trie
+                if (vtResult.isMalicious()) {
+                    trie.insert(dominioPuro, "VirusTotal");
+                }
                 return registrarBanco(dominioPuro, true, motivoExplicadoPelaIA);
             }
 
@@ -99,6 +110,16 @@ public class LinkVerificationService {
         return fallback;
     }
 
+    private boolean extrairStatusDaIA(String jsonIA, boolean fallback) {
+        try {
+            Map<String, Object> mapa = objectMapper.readValue(jsonIA, Map.class);
+            if (mapa != null && mapa.containsKey("isSuspicious"))
+                return (boolean) mapa.get("isSuspicious");
+        } catch (Exception e) {
+        }
+        return fallback;
+    }
+
     private Links registrarBanco(String url, boolean isSuspicious, String reason) {
         try {
             Links record = new Links(url, isSuspicious, reason);
@@ -108,7 +129,9 @@ public class LinkVerificationService {
         }
     }
 
-    public List<Links> getHistory() { return repository.findAll(); }
+    public List<Links> getHistory() {
+        return repository.findAll();
+    }
 
     public boolean checkUrlIsMaliciousLocal(String url) {
         String dominioPuro = extrairDominioPuro(url);

@@ -71,7 +71,7 @@ public class SmsVerificationService {
         String dominioPuro = extrairDominioPuro(extractedUrl);
 
         try {
-            // 1. Consulta Local
+            // Consulta Local
             boolean isLocalMalicious = linkVerificationService.checkUrlIsMaliciousLocal(dominioPuro);
             if (isLocalMalicious) {
                 String jsonIA = geminiService.analisarTexto(smsText);
@@ -79,7 +79,7 @@ public class SmsVerificationService {
                 return smsRepository.save(new SmsLinks(smsText, dominioPuro, true, motivoIA));
             }
 
-            // 2. Consulta Externa VirusTotal
+            // Consulta Externa VirusTotal
             VirusTotalService.VTResult vtResult = virusTotalService.checkUrlIsMalicious(extractedUrl);
 
             if (vtResult.isMalicious()) {
@@ -90,7 +90,7 @@ public class SmsVerificationService {
                 return smsRepository.save(new SmsLinks(smsText, dominioPuro, true, motivoIA));
             }
 
-            // Link parece limpo tecnicamente, mas vamos validar o contexto do texto com a IA
+            //  Validando o contexto do texto com a IA
             String jsonIA = geminiService.analisarTexto(smsText);
             boolean suspeitoPorContexto = extrairStatusDaIA(jsonIA, false);
             String motivoIA = extrairMotivoDaIA(jsonIA, "SMS verificado com sucesso.");

@@ -49,7 +49,7 @@ public class GeminiService {
         try {
             return enviarRequisicao(url, prompt);
         } catch (Exception e) {
-            boolean perigo = (maliciosos > 0 || suspeitos > 1);
+            boolean perigo = (maliciosos > 0 || suspeitos > 0);
             return "{\"isSuspicious\": " + perigo + ", \"reason\": \"Link classificado como risco por motores globais.\"}";
         }
     }

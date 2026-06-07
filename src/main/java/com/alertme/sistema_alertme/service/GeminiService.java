@@ -23,8 +23,8 @@ public class GeminiService {
     
     private final tools.jackson.databind.ObjectMapper objectMapper = new tools.jackson.databind.ObjectMapper();
 
-    // URL base da API Gemini v1
-    private final String API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=";
+    // URL base da API Gemini v1.5 Flash
+    private final String API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=";
 
     // Analisa o contexto de mensagens de texto (SMS)
     public String analisarTexto(String texto) {

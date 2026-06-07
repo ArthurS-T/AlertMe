@@ -47,7 +47,7 @@ public class GeminiService {
     public String explicarUrl(String urlAlvo, int maliciosos, int suspeitos) {
         // Validação preventiva para o Render
         if (apiKey == null || apiKey.trim().isEmpty() || apiKey.equals("${GEMINI_API_KEY}")) {
-            System.err.println("[Gemini Error] A chave API_KEY está nula ou não foi lida do ambiente!");
+            System.err.println("[Gemini DEBUG] A chave API_KEY está nula ou não foi lida do ambiente!");
             boolean perigo = (maliciosos > 0 || suspeitos > 0);
             return "{\"isSuspicious\": " + perigo + ", \"reason\": \"Link analisado pelos motores locais (IA indisponível).\"}";
         }

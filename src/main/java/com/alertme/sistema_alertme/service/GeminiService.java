@@ -24,17 +24,19 @@ public class GeminiService {
     // URL da API do Gemini Flash
     private final String API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
 
-    // Analisa o contexto de mensagens de texto (SMS)
+    // Analisa o contexto de mensagens de texto
     public String analisarTexto(String texto) {
         if (apiKey == null || apiKey.trim().isEmpty() || apiKey.equals("${GEMINI_API_KEY}")) {
             System.err.println("[Gemini DEBUG] A chave API_KEY está nula ou ausente!");
             return "{\"isSuspicious\": false, \"reason\": \"Análise textual indisponível (Chave de API ausente).\"}";
         }
 
-        String prompt = "Você é um especialista em segurança digital do sistema AlertMe. "
-                + "Analise o seguinte texto e identifique indícios de Engenharia Social ou 'Golpe do Presente'. "
-                + "Responda estritamente em JSON com as chaves: 'isSuspicious' (boolean) e 'reason' (string didática em português). "
-                + "Retorne apenas o JSON puro, sem markdown. " + "Texto: " + texto;
+        String prompt = "Você é um especialista em segurança digital do sistema AlertMe.\n\n"
+                + "Analise o seguinte texto de SMS e identifique se trata-se de um ataque de Engenharia Social, golpe de falsa central, agendamento de Pix falso ou 'Golpe do Presente'.\n\n"
+                + "Responda estritamente em um JSON estruturado com as chaves exatas: 'isSuspicious' (boolean) e 'reason' (string didática em português).\n\n"
+                + "IMPORTANTE NA FORMATAÇÃO DA REASON: Caso identifique elementos suspeitos ou que tragam segurança, separe cada ponto explicativo pulando uma linha dupla, começando estritamente com os emoticons numéricos (1️⃣, 2️⃣, 3️⃣) no início de uma nova linha.\n\n"
+                + "Retorne apenas o JSON puro, sem blocos de markdown.\n\n"
+                + "Texto a ser analisado: " + texto;
 
         try {
             return enviarRequisicao(prompt);
@@ -57,16 +59,14 @@ public class GeminiService {
 
         if (maliciosos == 0 && suspeitos == 0) {
             prompt = "Você é um especialista em segurança digital do sistema AlertMe. "
-                    + "A URL [" + urlAlvo + "] não possui registros de ameaças nos motores locais do VirusTotal. "
-                    + "Gere um JSON com as chaves exatas: 'isSuspicious' (boolean) e 'reason' (string didática em português). "
+                    + "A URL [" + urlAlvo + "] não possui registros de ameaças nos motores locais do VirusTotal. " + "Gere um JSON com as chaves exatas: 'isSuspicious' (boolean) e 'reason' (string didática em português). "
                     + "REGRAS DE ANÁLISE COMPORTAMENTAL: "
                     + "1. Se o nome do domínio parecer legítimo (ex: google.com, uol.com.br), defina 'isSuspicious' como false e crie uma explicação curta separada em tópicos com emoticons (1️⃣, 2️⃣, etc.) mostrando por que ele transmite confiança. "
                     + "2. Se o nome do domínio possuir termos altamente suspeitos, erros ortográficos propositais, promessas exageradas ou cara de fraude (ex: 'recarga-gratis', 'atualize-sua-conta-aqui', domínios muito estranhos), defina 'isSuspicious' como true. Explique na 'reason' (em tópicos 1️⃣, 2️⃣, etc.) que, embora não conste no VirusTotal, o nome do link indica uma forte suspeita de golpe ou página criada recentemente para fraude. "
                     + "IMPORTANTE NA FORMATAÇÃO: Separe cada tópico ou ponto da 'reason' pulando uma linha dupla, começando estritamente com os emoticons numéricos (1️⃣, 2️⃣, 3️⃣) em uma nova linha. Retorne apenas o JSON puro, sem markdown.";
         } else {
             prompt = "Você é um especialista em segurança digital do sistema AlertMe. "
-                    + "A URL [" + urlAlvo + "] foi marcada por " + maliciosos + " motores como maliciosa e " + suspeitos
-                    + " como suspeita no VirusTotal. "
+                    + "A URL [" + urlAlvo + "] foi marcada por " + maliciosos + " motores como maliciosa e " + suspeitos + " como suspeita no VirusTotal. "
                     + "Gere um JSON com as chaves exatas: 'isSuspicious' (boolean, que deve ser true) e 'reason' (uma explicação didática detalhando a ameaça). "
                     + "IMPORTANTE NA FORMATAÇÃO: Separe cada risco identificado pulando uma linha dupla, começando estritamente com os emoticons numéricos (1️⃣, 2️⃣, 3️⃣) em uma nova linha. "
                     + "Retorne apenas o JSON puro, sem markdown.";
@@ -124,7 +124,8 @@ public class GeminiService {
             }
 
             tools.jackson.databind.JsonNode rootNode = objectMapper.valueToTree(response);
-            String textoPuro = rootNode.path("candidates").path(0).path("content").path("parts").path(0).path("text").asText();
+            String textoPuro = rootNode.path("candidates").path(0).path("content").path("parts").path(0).path("text")
+                    .asText();
 
             // Limpando formatação pra garantir o JSON puro
             if (textoPuro.contains("```")) {

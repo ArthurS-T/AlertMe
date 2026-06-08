@@ -3,14 +3,12 @@ package com.alertme.sistema_alertme.service;
 import com.alertme.sistema_alertme.model.SmsLinks;
 import com.alertme.sistema_alertme.repository.SmsRepository;
 import org.springframework.stereotype.Service;
-
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @Service
 public class SmsVerificationService {
@@ -18,10 +16,9 @@ public class SmsVerificationService {
     private final SmsRepository smsRepository;
     private final VirusTotalService virusTotalService;
     private final LinkVerificationService linkVerificationService;
-    private final GeminiService geminiService; // Injeção do Gemini
+    private final GeminiService geminiService; 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    // Expressão regular para capturar domínios e URLs dentro dos textos
     private static final Pattern URL_PATTERN = Pattern.compile(
             "(https?://(?:www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{1,256}\\.[a-zA-Z0-9()]{2,24}\\b(?:[-a-zA-Z0-9()@:%_\\+.~#?&//=]*))",
             Pattern.CASE_INSENSITIVE);
@@ -34,7 +31,7 @@ public class SmsVerificationService {
         this.geminiService = geminiService;
     }
 
-    // Remove de protocolo, www e subpastas
+    // Remoção de protocolo, www e subdominios 
     private String extrairDominioPuro(String url) {
         if (url == null) return "";
         String clean = url.toLowerCase().trim();
@@ -59,7 +56,7 @@ public class SmsVerificationService {
             extractedUrl = matcher.group().replaceAll("[.,]$", "").trim();
         }
 
-        // Se o SMS não tem link, passamos pelo Gemini para avaliar se é um golpe de engenharia social por texto puro
+        // SMS sem nenhum link/URL encontrado
         if (extractedUrl == null) {
             String jsonIA = geminiService.analisarTexto(smsText);
             String motivoIA = extrairMotivoDaIA(jsonIA, "SMS sem nenhum link/URL encontrado.");
@@ -71,31 +68,37 @@ public class SmsVerificationService {
         String dominioPuro = extrairDominioPuro(extractedUrl);
 
         try {
-            // Consulta Local
+            // Consulta Local na lista interna
             boolean isLocalMalicious = linkVerificationService.checkUrlIsMaliciousLocal(dominioPuro);
             if (isLocalMalicious) {
-                String jsonIA = geminiService.analisarTexto(smsText);
-                String motivoIA = extrairMotivoDaIA(jsonIA, "Bloqueado: Link contido no SMS pertence a um domínio marcado como ameaça.");
+                String jsonIA = geminiService.explicarUrl(extractedUrl, 5, 0); 
+                String motivoIA = extrairMotivoDaIA(jsonIA, "Bloqueado: Link contido no SMS pertence a um domínio marcado como ameaça local.");
                 return smsRepository.save(new SmsLinks(smsText, dominioPuro, true, motivoIA));
             }
 
-            // Consulta Externa VirusTotal
+            // Consulta externa com o VirusTotal
             VirusTotalService.VTResult vtResult = virusTotalService.checkUrlIsMalicious(extractedUrl);
+            
+            int maliciosos = vtResult.maliciousCount(); 
+            int suspeitos = vtResult.suspiciousCount();
 
-            if (vtResult.isMalicious()) {
-                linkVerificationService.verifyLink(extractedUrl); // Sincroniza localmente
-                
-                String jsonIA = geminiService.analisarTexto(smsText);
-                String motivoIA = extrairMotivoDaIA(jsonIA, "Bloqueado: Link malicioso detectado dentro do SMS.");
-                return smsRepository.save(new SmsLinks(smsText, dominioPuro, true, motivoIA));
+            // Margem de tolerancia
+            int limiteMotoresConfiaveis = 2;
+            boolean RealMalicioso = (maliciosos >= limiteMotoresConfiaveis);
+
+            String jsonIA;
+            if (RealMalicioso) {
+                linkVerificationService.verifyLink(extractedUrl); // Sincroniza localmente na lista
+                jsonIA = geminiService.explicarUrl(extractedUrl, maliciosos, suspeitos);
+            } else {
+                // Se o VirusTotal retornou apenas 1, enviamos 0 e 0 para o Gemini ativar a verificação heurística e validar a autenticidade do domínio real
+                jsonIA = geminiService.explicarUrl(extractedUrl, 0, 0);
             }
 
-            //  Validando o contexto do texto com a IA
-            String jsonIA = geminiService.analisarTexto(smsText);
-            boolean suspeitoPorContexto = extrairStatusDaIA(jsonIA, false);
-            String motivoIA = extrairMotivoDaIA(jsonIA, "SMS verificado com sucesso.");
+            boolean statusFinalSuspeito = extrairStatusDaIA(jsonIA, RealMalicioso);
+            String motivoIA = extrairMotivoDaIA(jsonIA, RealMalicioso ? "Link malicioso detectado dentro do SMS." : "SMS verificado com sucesso.");
 
-            return smsRepository.save(new SmsLinks(smsText, dominioPuro, suspeitoPorContexto, motivoIA));
+            return smsRepository.save(new SmsLinks(smsText, dominioPuro, statusFinalSuspeito, motivoIA));
 
         } catch (Exception e) {
             System.err.println("[MSG ERRO] Falha ao processar motores: " + e.getMessage());

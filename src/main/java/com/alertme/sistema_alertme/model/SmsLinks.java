@@ -5,7 +5,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "tb_sms_links", indexes = {
-@Index(name = "idx_checked_at", columnList = "checkedAt") // Index para que a busca por historico seja mais rápida
+    @Index(name = "idx_checked_at", columnList = "checkedAt")
 })
 public class SmsLinks {
 
@@ -16,10 +16,15 @@ public class SmsLinks {
     @Column(columnDefinition = "TEXT", nullable = false)
     private String smsText;
 
+    @Column(columnDefinition = "TEXT") // Permite URLs muito longas (com tokens ou parâmetros extensos)
     private String extractedUrl;
-    @com.fasterxml.jackson.annotation.JsonProperty("isSuspicious") // Para garantir que o JSON tenha a propriedade "isSuspicious"
+
+    @com.fasterxml.jackson.annotation.JsonProperty("isSuspicious")
     private boolean isSuspicious;
+
+    @Column(columnDefinition = "TEXT") // Permite relatórios detalhados pela IA do Gemini sem estourar o limite do banco
     private String reason;
+
     private LocalDateTime checkedAt;
 
     // Construtores
@@ -37,6 +42,7 @@ public class SmsLinks {
     public Long getId() { return id; }
     public String getSmsText() { return smsText; }
     public String getExtractedUrl() { return extractedUrl; }
+    
     @com.fasterxml.jackson.annotation.JsonProperty("isSuspicious")
     public boolean isSuspicious() { return isSuspicious; }
     public String getReason() { return reason; }

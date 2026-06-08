@@ -4,7 +4,11 @@ import jakarta.persistence.*;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 @Entity
+<<<<<<< HEAD
+@Table(name = "tb_links")
+=======
 @Table(name = "tb_links", uniqueConstraints = {@UniqueConstraint(columnNames = {"url"})})
+>>>>>>> teste
 public class Links {
 
     @Id

@@ -9,7 +9,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/sms")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = "https://alertme-wicd.onrender.com")
 public class SmsLinkController {
 
     private final SmsVerificationService smsVerificationService;

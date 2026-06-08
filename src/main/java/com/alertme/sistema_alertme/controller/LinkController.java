@@ -14,7 +14,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/links")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = "https://alertme-wicd.onrender.com")
 public class LinkController {
 
     private final LinkVerificationService service;

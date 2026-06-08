@@ -1,33 +1,28 @@
 package com.alertme.sistema_alertme.model;
 
 import jakarta.persistence.*;
-import com.fasterxml.jackson.annotation.JsonProperty;
 
 @Entity
-<<<<<<< HEAD
-@Table(name = "tb_links")
-=======
-@Table(name = "tb_links", uniqueConstraints = {@UniqueConstraint(columnNames = {"url"})})
->>>>>>> teste
+@Table(name = "links")
 public class Links {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY) // ID autoincrementável
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, length = 500)
+    @Column(nullable = false, unique = true)
     private String url;
 
-    @JsonProperty("isSuspicious")
     @Column(nullable = false)
     private boolean isSuspicious;
 
     @Column(columnDefinition = "TEXT")
     private String reason;
 
-    // Construtores
+    // Construtor Padrão (Obrigatório para o JPA/Hibernate)
     public Links() {}
 
+    // Construtor Customizado
     public Links(String url, boolean isSuspicious, String reason) {
         this.url = url;
         this.isSuspicious = isSuspicious;
@@ -36,12 +31,13 @@ public class Links {
 
     // Getters e Setters
     public Long getId() { return id; }
-    
+    public void setId(Long id) { this.id = id; }
+
     public String getUrl() { return url; }
     public void setUrl(String url) { this.url = url; }
 
     public boolean isSuspicious() { return isSuspicious; }
-    public void setSuspicious(boolean isSuspicious) { this.isSuspicious = isSuspicious; }
+    public void setSuspicious(boolean suspicious) { this.isSuspicious = suspicious; }
 
     public String getReason() { return reason; }
     public void setReason(String reason) { this.reason = reason; }

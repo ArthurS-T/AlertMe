@@ -22,7 +22,7 @@ public class Links {
     @Column(nullable = false)
     private boolean isSuspicious;
 
-    @Column(length = 255)
+    @Column(columnDefinition = "TEXT")
     private String reason;
 
     // Construtores
